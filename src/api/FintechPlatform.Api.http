@@ -1,0 +1,63 @@
+@FintechPlatform.Api_HostAddress = http://localhost:5000
+@merchantId = your-merchant-id-here
+@paymentId = your-payment-id-here
+
+### Health Check
+GET {{FintechPlatform.Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+### Create Merchant
+POST {{FintechPlatform.Api_HostAddress}}/api/merchants
+Content-Type: application/json
+
+{
+  "name": "Acme Corp",
+  "email": "acme@example.com"
+}
+
+###
+
+### Get Merchant by ID
+GET {{FintechPlatform.Api_HostAddress}}/api/merchants/{{merchantId}}
+Accept: application/json
+
+###
+
+### Get All Active Merchants
+GET {{FintechPlatform.Api_HostAddress}}/api/merchants
+Accept: application/json
+
+###
+
+### Create Payment
+POST {{FintechPlatform.Api_HostAddress}}/api/merchants/{{merchantId}}/payments
+Content-Type: application/json
+
+{
+  "amountInMinorUnits": 10000,
+  "currency": "USD",
+  "externalReference": "order-12345",
+  "description": "Product purchase"
+}
+
+###
+
+### Get Payment by ID
+GET {{FintechPlatform.Api_HostAddress}}/api/merchants/{{merchantId}}/payments/{{paymentId}}
+Accept: application/json
+
+###
+
+### Get Merchant Payments
+GET {{FintechPlatform.Api_HostAddress}}/api/merchants/{{merchantId}}/payments
+Accept: application/json
+
+###
+
+### Complete Payment
+POST {{FintechPlatform.Api_HostAddress}}/api/merchants/{{merchantId}}/payments/{{paymentId}}/complete
+Content-Type: application/json
+
+###
