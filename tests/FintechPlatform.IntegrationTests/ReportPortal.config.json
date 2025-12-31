@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/reportportal/agent-net-xunit/develop/src/ReportPortal.XUnit/ReportPortal.config.schema",
+  "enabled": true,
+  "server": {
+    "url": "http://localhost:8080",
+    "project": "fintech_platform",
+    "authentication": {
+      "uuid": "your-api-token-here"
+    }
+  },
+  "launch": {
+    "name": "FintechPlatform Integration Tests",
+    "description": "Integration tests for FintechPlatform API with WebApplicationFactory",
+    "debugMode": false,
+    "attributes": [
+      "integration",
+      "api",
+      "dotnet",
+      "fintech"
+    ]
+  }
+}

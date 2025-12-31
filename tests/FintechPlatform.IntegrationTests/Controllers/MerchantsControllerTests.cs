@@ -5,21 +5,36 @@ using FintechPlatform.Api.Models.Requests;
 using FintechPlatform.Domain.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using NUnit.Framework;
 
 namespace FintechPlatform.IntegrationTests.Controllers;
 
-public class MerchantsControllerTests : IClassFixture<TestWebApplicationFactory>
+[TestFixture]
+public class MerchantsControllerTests
 {
-    private readonly HttpClient _client;
-    private readonly TestWebApplicationFactory _factory;
+    private HttpClient _client = null!;
+    private TestWebApplicationFactory _factory = null!;
 
-    public MerchantsControllerTests(TestWebApplicationFactory factory)
+    [SetUp]
+    public void Setup()
     {
-        _factory = factory;
-        _client = factory.CreateClient();
+        _factory = new TestWebApplicationFactory();
+        _client = _factory.CreateClient();
     }
 
-    [Fact]
+    [TearDown]
+    public async Task TearDown()
+    {
+        _client?.Dispose();
+        
+        if (_factory != null)
+        {
+            await _factory.CleanupDatabaseAsync();
+            _factory.Dispose();
+        }
+    }
+
+    [Test]
     public async Task CreateMerchant_ValidData_Returns201AndSavesToDb()
     {
         var request = new CreateMerchantRequest
@@ -44,7 +59,7 @@ public class MerchantsControllerTests : IClassFixture<TestWebApplicationFactory>
         dbMerchant!.Name.Should().Be("Stripe Inc");
     }
 
-    [Fact]
+    [Test]
     public async Task CreateMerchant_DuplicateEmail_Returns409()
     {
         var db = _factory.GetDbContext();
@@ -63,7 +78,7 @@ public class MerchantsControllerTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
-    [Fact]
+    [Test]
     public async Task GetMerchant_Exists_Returns200()
     {
         var db = _factory.GetDbContext();
@@ -79,7 +94,7 @@ public class MerchantsControllerTests : IClassFixture<TestWebApplicationFactory>
         result.Email.Should().Be("api@squareup.com");
     }
 
-    [Fact]
+    [Test]
     public async Task GetMerchant_NotFound_Returns404()
     {
         var response = await _client.GetAsync($"/api/merchants/{Guid.NewGuid()}");
@@ -87,7 +102,7 @@ public class MerchantsControllerTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task GetActiveMerchants_ReturnsOnlyActive()
     {
         var db = _factory.GetDbContext();

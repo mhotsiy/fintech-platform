@@ -5,21 +5,36 @@ using FintechPlatform.Api.Models.Requests;
 using FintechPlatform.Domain.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using NUnit.Framework;
 
 namespace FintechPlatform.IntegrationTests.Controllers;
 
-public class PaymentsControllerTests : IClassFixture<TestWebApplicationFactory>
+[TestFixture]
+public class PaymentsControllerTests
 {
-    private readonly HttpClient _client;
-    private readonly TestWebApplicationFactory _factory;
+    private HttpClient _client = null!;
+    private TestWebApplicationFactory _factory = null!;
 
-    public PaymentsControllerTests(TestWebApplicationFactory factory)
+    [SetUp]
+    public void SetUp()
     {
-        _factory = factory;
-        _client = factory.CreateClient();
+        _factory = new TestWebApplicationFactory();
+        _client = _factory.CreateClient();
     }
 
-    [Fact]
+    [TearDown]
+    public async Task TearDown()
+    {
+        _client?.Dispose();
+        
+        if (_factory != null)
+        {
+            await _factory.CleanupDatabaseAsync();
+            _factory.Dispose();
+        }
+    }
+
+    [Test]
     public async Task CreatePayment_ValidData_Returns201AndSavesToDb()
     {
         var merchant = await CreateMerchant("Shopify", "billing@shopify.com");
@@ -48,7 +63,7 @@ public class PaymentsControllerTests : IClassFixture<TestWebApplicationFactory>
         dbPayment!.AmountInMinorUnits.Should().Be(25000);
     }
 
-    [Fact]
+    [Test]
     public async Task CreatePayment_LargeAmount_StoresCorrectly()
     {
         var merchant = await CreateMerchant("BigCorp", "finance@bigcorp.com");
@@ -70,7 +85,7 @@ public class PaymentsControllerTests : IClassFixture<TestWebApplicationFactory>
         dbPayment!.AmountInMinorUnits.Should().Be(999999999999L);
     }
 
-    [Fact]
+    [Test]
     public async Task CreatePayment_NonExistentMerchant_Returns404()
     {
         var request = new CreatePaymentRequest
@@ -84,7 +99,7 @@ public class PaymentsControllerTests : IClassFixture<TestWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CompletePayment_UpdatesStatusAndBalance()
     {
         var merchant = await CreateMerchant("TestMerchant", "test@merchant.com");
@@ -109,7 +124,7 @@ public class PaymentsControllerTests : IClassFixture<TestWebApplicationFactory>
         balance.AvailableBalanceInMinorUnits.Should().Be(50000);
     }
 
-    [Fact]
+    [Test]
     public async Task GetPaymentsByMerchant_ReturnsCorrectPayments()
     {
         var merchant1 = await CreateMerchant("Merchant1", "m1@test.com");
