@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using FintechPlatform.Domain.Events;
+using FintechPlatform.Infrastructure.Messaging;
 using FintechPlatform.Workers.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,18 +18,25 @@ public class FraudDetectionWorker : BackgroundService
     private readonly ILogger<FraudDetectionWorker> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly IConsumer<string, string> _consumer;
+    private readonly IDeadLetterQueuePublisher _dlqPublisher;
 
     // Risk assessment thresholds
     private const long AUTO_APPROVE_THRESHOLD = 100000; // $1000.00 in cents
     private const int MERCHANT_PAYMENT_COUNT_THRESHOLD = 0; // New merchant if < 0 payments (allow all for testing)
+    
+    // Retry configuration
+    private const int MAX_RETRY_ATTEMPTS = 3;
+    private readonly Dictionary<string, RetryInfo> _retryTracking = new();
 
     public FraudDetectionWorker(
         ILogger<FraudDetectionWorker> logger,
         IServiceProvider serviceProvider,
+        IDeadLetterQueuePublisher dlqPublisher,
         IConfiguration configuration)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
+        _dlqPublisher = dlqPublisher;
 
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers") ?? "localhost:9092";
 
@@ -41,7 +49,7 @@ public class FraudDetectionWorker : BackgroundService
         };
 
         _consumer = new ConsumerBuilder<string, string>(config).Build();
-        _logger.LogInformation("Fraud detection worker initialized");
+        _logger.LogInformation("Fraud detection worker initialized with DLQ support");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,9 +74,20 @@ public class FraudDetectionWorker : BackgroundService
 
                     _logger.LogInformation("📨 Received message from Kafka");
 
-                    await ProcessPaymentEventAsync(consumeResult, stoppingToken);
+                    var success = await ProcessPaymentEventAsync(consumeResult, stoppingToken);
 
-                    _consumer.Commit(consumeResult);
+                    if (success)
+                    {
+                        // Only commit offset if processing succeeded
+                        _consumer.Commit(consumeResult);
+                    }
+                    else
+                    {
+                        // Processing failed after retries - already sent to DLQ
+                        // Commit offset to move past this message
+                        _consumer.Commit(consumeResult);
+                        _logger.LogWarning("Message processing failed and sent to DLQ, offset committed to continue");
+                    }
                 }
                 catch (ConsumeException ex)
                 {
@@ -101,68 +120,96 @@ public class FraudDetectionWorker : BackgroundService
         }
     }
 
-    private async Task ProcessPaymentEventAsync(ConsumeResult<string, string> consumeResult, CancellationToken cancellationToken)
+    private async Task<bool> ProcessPaymentEventAsync(ConsumeResult<string, string> consumeResult, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("🔎 ProcessPaymentEventAsync started");
+        var messageKey = $"{consumeResult.TopicPartition}:{consumeResult.Offset}";
         
-        var eventType = consumeResult.Message.Headers
-            .FirstOrDefault(h => h.Key == "event-type")?.GetValueBytes();
-        
-        if (eventType == null)
+        try
         {
-            _logger.LogWarning("Event without event-type header received");
-            return;
-        }
+            _logger.LogInformation("🔎 ProcessPaymentEventAsync started");
+            
+            var eventType = consumeResult.Message.Headers
+                .FirstOrDefault(h => h.Key == "event-type")?.GetValueBytes();
+            
+            if (eventType == null)
+            {
+                _logger.LogWarning("Event without event-type header received");
+                await SendToDlqAsync(consumeResult, "MissingEventTypeHeader", "Event does not have event-type header", 0, cancellationToken);
+                return false;
+            }
 
-        var eventTypeString = System.Text.Encoding.UTF8.GetString(eventType);
-        _logger.LogInformation("Event type: {EventType}", eventTypeString);
+            var eventTypeString = System.Text.Encoding.UTF8.GetString(eventType);
+            _logger.LogInformation("Event type: {EventType}", eventTypeString);
 
-        // Only process PaymentCreated events
-        if (eventTypeString != "PaymentCreated")
-        {
-            _logger.LogInformation("Skipping event type: {EventType}", eventTypeString);
-            return;
-        }
+            // Only process PaymentCreated events
+            if (eventTypeString != "PaymentCreated")
+            {
+                _logger.LogInformation("Skipping event type: {EventType}", eventTypeString);
+                return true; // Not an error, just not our event
+            }
 
-        _logger.LogInformation("Deserializing PaymentCreatedEvent...");
-        var paymentCreatedEvent = JsonSerializer.Deserialize<PaymentCreatedEvent>(
-            consumeResult.Message.Value,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _logger.LogInformation("Deserializing PaymentCreatedEvent...");
+            var paymentCreatedEvent = JsonSerializer.Deserialize<PaymentCreatedEvent>(
+                consumeResult.Message.Value,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-        if (paymentCreatedEvent == null)
-        {
-            _logger.LogWarning("Failed to deserialize PaymentCreatedEvent");
-            return;
-        }
-        
-        _logger.LogInformation("Successfully deserialized payment event for PaymentId: {PaymentId}", paymentCreatedEvent.PaymentId);
+            if (paymentCreatedEvent == null)
+            {
+                _logger.LogWarning("Failed to deserialize PaymentCreatedEvent");
+                await SendToDlqAsync(consumeResult, "DeserializationFailure", "Failed to deserialize PaymentCreatedEvent from JSON", 0, cancellationToken);
+                return false;
+            }
+            
+            _logger.LogInformation("Successfully deserialized payment event for PaymentId: {PaymentId}", paymentCreatedEvent.PaymentId);
 
-        _logger.LogInformation(
-            "🔍 Fraud Detection: Analyzing payment {PaymentId} for merchant {MerchantId}, Amount: ${Amount} {Currency}",
-            paymentCreatedEvent.PaymentId,
-            paymentCreatedEvent.MerchantId,
-            paymentCreatedEvent.AmountInMinorUnits / 100.0,
-            paymentCreatedEvent.Currency);
-
-        // Perform risk assessment
-        var riskAssessment = await AssessRiskAsync(paymentCreatedEvent, cancellationToken);
-
-        if (riskAssessment.IsApproved)
-        {
             _logger.LogInformation(
-                "✅ Fraud Detection: Payment {PaymentId} APPROVED - {Reason}. Auto-completing payment...",
+                "🔍 Fraud Detection: Analyzing payment {PaymentId} for merchant {MerchantId}, Amount: ${Amount} {Currency}",
                 paymentCreatedEvent.PaymentId,
-                riskAssessment.Reason);
+                paymentCreatedEvent.MerchantId,
+                paymentCreatedEvent.AmountInMinorUnits / 100.0,
+                paymentCreatedEvent.Currency);
 
-            // Automatically complete the payment
-            await AutoCompletePaymentAsync(paymentCreatedEvent.PaymentId, cancellationToken);
+            // Perform risk assessment
+            var riskAssessment = await AssessRiskAsync(paymentCreatedEvent, cancellationToken);
+
+            if (riskAssessment.IsApproved)
+            {
+                _logger.LogInformation(
+                    "✅ Fraud Detection: Payment {PaymentId} APPROVED - {Reason}. Auto-completing payment...",
+                    paymentCreatedEvent.PaymentId,
+                    riskAssessment.Reason);
+
+                // Automatically complete the payment
+                await AutoCompletePaymentAsync(paymentCreatedEvent.PaymentId, cancellationToken);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "⚠️ Fraud Detection: Payment {PaymentId} FLAGGED for manual review - {Reason}",
+                    paymentCreatedEvent.PaymentId,
+                    riskAssessment.Reason);
+            }
+
+            // Success - clear retry tracking
+            _retryTracking.Remove(messageKey);
+            return true;
         }
-        else
+        catch (JsonException ex)
         {
-            _logger.LogWarning(
-                "⚠️ Fraud Detection: Payment {PaymentId} FLAGGED for manual review - {Reason}",
-                paymentCreatedEvent.PaymentId,
-                riskAssessment.Reason);
+            // JSON errors are permanent - send to DLQ immediately
+            _logger.LogError(ex, "JSON deserialization error (permanent failure)");
+            await SendToDlqAsync(consumeResult, "JsonException", ex.Message, 0, cancellationToken);
+            return false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Business logic errors - might be transient (e.g., balance not found yet)
+            return await HandleRetryableErrorAsync(consumeResult, messageKey, "InvalidOperationException", ex, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Unknown errors - retry with caution
+            return await HandleRetryableErrorAsync(consumeResult, messageKey, "UnexpectedException", ex, cancellationToken);
         }
     }
 
@@ -225,9 +272,93 @@ public class FraudDetectionWorker : BackgroundService
         }
     }
 
+    private async Task<bool> HandleRetryableErrorAsync(
+        ConsumeResult<string, string> consumeResult,
+        string messageKey,
+        string errorType,
+        Exception ex,
+        CancellationToken cancellationToken)
+    {
+        // Track retry attempts
+        if (!_retryTracking.ContainsKey(messageKey))
+        {
+            _retryTracking[messageKey] = new RetryInfo
+            {
+                FirstAttemptTime = DateTime.UtcNow,
+                RetryCount = 0
+            };
+        }
+
+        var retryInfo = _retryTracking[messageKey];
+        retryInfo.RetryCount++;
+        retryInfo.LastAttemptTime = DateTime.UtcNow;
+
+        if (retryInfo.RetryCount <= MAX_RETRY_ATTEMPTS)
+        {
+            var backoffDelay = TimeSpan.FromSeconds(Math.Pow(2, retryInfo.RetryCount)); // Exponential backoff: 2s, 4s, 8s
+            
+            _logger.LogWarning(ex,
+                "🔄 Retryable error (attempt {RetryCount}/{MaxRetries}). Waiting {BackoffSeconds}s before retry. Error: {ErrorType}",
+                retryInfo.RetryCount,
+                MAX_RETRY_ATTEMPTS,
+                backoffDelay.TotalSeconds,
+                errorType);
+
+            await Task.Delay(backoffDelay, cancellationToken);
+            return false; // Will retry on next poll
+        }
+        else
+        {
+            // Max retries exceeded - send to DLQ
+            _logger.LogError(ex,
+                "❌ Max retries ({MaxRetries}) exceeded for message. Sending to DLQ. Error: {ErrorType}",
+                MAX_RETRY_ATTEMPTS,
+                errorType);
+
+            await SendToDlqAsync(consumeResult, errorType, ex.Message + "\n\n" + ex.StackTrace, retryInfo.RetryCount, cancellationToken);
+            _retryTracking.Remove(messageKey);
+            return false; // Sent to DLQ
+        }
+    }
+
+    private async Task SendToDlqAsync(
+        ConsumeResult<string, string> consumeResult,
+        string failureReason,
+        string? exceptionDetails,
+        int retryCount,
+        CancellationToken cancellationToken)
+    {
+        var eventType = consumeResult.Message.Headers
+            .FirstOrDefault(h => h.Key == "event-type")?.GetValueBytes();
+        var eventTypeString = eventType != null ? System.Text.Encoding.UTF8.GetString(eventType) : "Unknown";
+
+        var failedEvent = new FailedEventRecord(
+            originalTopic: consumeResult.Topic,
+            eventType: eventTypeString,
+            eventPayload: consumeResult.Message.Value,
+            failureReason: failureReason,
+            exceptionDetails: exceptionDetails ?? "No details available",
+            retryCount: retryCount,
+            firstFailedAt: DateTime.UtcNow,
+            lastFailedAt: DateTime.UtcNow,
+            consumerGroup: "fintechplatform-fraud-detection",
+            originalPartition: consumeResult.Partition.Value,
+            originalOffset: consumeResult.Offset.Value
+        );
+
+        await _dlqPublisher.PublishToDeadLetterQueueAsync(failedEvent, cancellationToken);
+    }
+
     private record RiskAssessment
     {
         public required bool IsApproved { get; init; }
         public required string Reason { get; init; }
+    }
+
+    private class RetryInfo
+    {
+        public DateTime FirstAttemptTime { get; set; }
+        public DateTime LastAttemptTime { get; set; }
+        public int RetryCount { get; set; }
     }
 }

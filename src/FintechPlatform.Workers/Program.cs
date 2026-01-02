@@ -30,6 +30,9 @@ builder.Services.Configure<KafkaSettings>(
 // Register event publisher
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
 
+// Register Dead Letter Queue publisher
+builder.Services.AddSingleton<IDeadLetterQueuePublisher, KafkaDeadLetterQueuePublisher>();
+
 // Register background workers
 builder.Services.AddHostedService<FraudDetectionWorker>();
 builder.Services.AddHostedService<PaymentEventLogger>();
