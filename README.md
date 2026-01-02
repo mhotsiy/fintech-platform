@@ -6,6 +6,7 @@ A production-ready fintech payment platform built with .NET 8, following Clean A
 
 - **Clean Architecture**: Separation of concerns with layered design
 - **Domain-Driven Design**: Rich domain models with business logic
+- **Event-Driven Architecture**: Async messaging with Kafka for scalability
 - **ACID Transactions**: Atomic operations for financial safety
 - **Event Sourcing**: Immutable ledger for complete audit trail
 
@@ -16,7 +17,8 @@ A production-ready fintech payment platform built with .NET 8, following Clean A
 - **PostgreSQL 16** - Relational database
 - **Entity Framework Core 10** - ORM and migrations
 - **Dapper** - High-performance queries
-- **Docker** - Database containerization
+- **Kafka** - Event streaming and async messaging
+- **Docker** - Service containerization
 - **Swagger/OpenAPI** - API documentation
 
 ## 📁 Project Structure
@@ -51,6 +53,14 @@ fintech-app/
 - ✅ Atomic transactions - all-or-nothing operations
 - ✅ Rebuildable ledger - can reconstruct balances from history
 
+### Event-Driven Architecture
+- ✅ **Kafka Event Streaming** - Reliable async message delivery
+- ✅ **Domain Events** - PaymentCreated, PaymentCompleted, WithdrawalRequested
+- ✅ **Event Consumers** - Background workers process events independently
+- ✅ **At-Least-Once Delivery** - Manual offset commits prevent message loss
+- ✅ **Ordered Processing** - Partition keys ensure message ordering
+- ✅ **Kafka UI** - Web interface for monitoring topics and messages
+
 ### API Endpoints
 
 #### Health
@@ -78,28 +88,38 @@ fintech-app/
 1. **Clone the repository**
 ```bash
 git clone <your-repo-url>
-cd fintech-app
+cd fintech-platform
 ```
 
-2. **Start PostgreSQL database**
+2. **Start all services (Postgres, Kafka, Zookeeper, Kafka UI)**
 ```bash
 docker-compose up -d
 ```
 
-3. **Apply database migrations**
+Wait 30-60 seconds for Kafka to initialize fully.
+
+3. **Verify services are running**
+```bash
+docker-compose ps
+```
+
+You should see: postgres, flyway, zookeeper, kafka, and kafka-ui all healthy.
+
+4. **Apply database migrations**
 ```bash
 dotnet ef database update --project src/infrastructure/FintechPlatform.Infrastructure.csproj --startup-project src/api/FintechPlatform.Api.csproj
 ```
 
-4. **Run the API**
+5. **Run the API**
 ```bash
 cd src/api
 dotnet run
 ```
 
-5. **Access Swagger UI**
+6. **Access web interfaces**
 ```
-http://localhost:5153/swagger
+API Swagger UI:  http://localhost:5153/swagger
+Kafka UI:        http://localhost:8080
 ```
 
 ## 📊 Database Schema
@@ -116,34 +136,86 @@ http://localhost:5153/swagger
 - **CHECK**: Positive amounts, non-negative balances
 - **FOREIGN KEYS**: Referential integrity across all tables
 
-## 🧪 Example Usage
+## 🧪 Testing the Event-Driven System
 
-### Create a Merchant
+### End-to-End Payment Flow with Events
+
+1. **Create a Merchant**
 ```bash
 curl -X POST http://localhost:5153/api/merchants \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Acme Corporation",
-    "email": "billing@acme.com"
+    "name": "Coffee Shop Inc",
+    "email": "payments@coffeeshop.com"
   }'
 ```
 
-### Create a Payment
+Save the returned `id` (merchant GUID).
+
+2. **Create a Payment** (publishes `PaymentCreatedEvent`)
 ```bash
-curl -X POST http://localhost:5153/api/payments \
+curl -X POST http://localhost:5153/api/merchants/{merchant-id}/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "merchantId": "your-merchant-guid",
-    "amountInMinorUnits": 10000,
+    "amountInMinorUnits": 5000,
     "currency": "USD",
-    "externalReference": "order-12345",
-    "description": "Product purchase"
+    "externalReference": "ORDER-001",
+    "description": "Latte order"
   }'
 ```
 
-### Complete a Payment
+Save the returned payment `id`.
+
+3. **Complete the Payment** (publishes `PaymentCompletedEvent`)
 ```bash
-curl -X POST http://localhost:5153/api/payments/{payment-id}/complete
+curl -X POST http://localhost:5153/api/merchants/{merchant-id}/payments/{payment-id}/complete
+```
+
+4. **View Events in Kafka UI**
+- Open http://localhost:8080
+- Navigate to **Topics** → **payment-events**
+- Click **Messages** tab
+- You should see 2 events:
+  - `PaymentCreatedEvent` with event details
+  - `PaymentCompletedEvent` with balance update
+
+5. **Check Consumer Logs**
+```bash
+# In terminal where API is running, you should see:
+# [PaymentEventConsumer] Payment created: PaymentId=..., Amount=50.00 USD
+# [PaymentEventConsumer] Payment completed: PaymentId=..., NewBalance=50.00
+```
+
+### Kafka Commands
+
+**List Topics**
+```bash
+docker exec -it fintechplatform-kafka kafka-topics \
+  --list \
+  --bootstrap-server localhost:9092
+```
+
+**View Messages in Topic**
+```bash
+docker exec -it fintechplatform-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic payment-events \
+  --from-beginning
+```
+
+**Check Consumer Groups**
+```bash
+docker exec -it fintechplatform-kafka kafka-consumer-groups \
+  --bootstrap-server localhost:9092 \
+  --list
+```
+
+**View Consumer Lag**
+```bash
+docker exec -it fintechplatform-kafka kafka-consumer-groups \
+  --bootstrap-server localhost:9092 \
+  --group fintechplatform-api \
+  --describe
 ```
 
 ## 🔒 Security Considerations
@@ -193,17 +265,25 @@ docker exec fintechplatform-postgres psql -U postgres -d fintechplatform -c "SEL
 ## 🐳 Docker Management
 
 ```bash
-# Start database
+# Start all services (Postgres, Kafka, Zookeeper, Kafka UI)
 docker-compose up -d
 
-# Stop database
+# View all running services
+docker-compose ps
+
+# Stop all services
 docker-compose down
 
 # Stop and remove volumes (clean slate)
 docker-compose down -v
 
-# View logs
+# View logs for specific service
 docker-compose logs -f postgres
+docker-compose logs -f kafka
+docker-compose logs -f api
+
+# Access Kafka UI
+open http://localhost:8080
 ```
 
 ## 🧹 Maintenance

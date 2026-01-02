@@ -1,7 +1,7 @@
 namespace FintechPlatform.Domain.Enums;
 
 /// <summary>
-/// Supported currency codes (ISO 4217)
+/// ISO 4217 currency codes supported by the platform
 /// </summary>
 public enum Currency
 {

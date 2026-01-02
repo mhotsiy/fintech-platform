@@ -1,6 +1,7 @@
 using FintechPlatform.Api.Mapping;
 using FintechPlatform.Api.Models.Dtos;
 using FintechPlatform.Domain.Entities;
+using FintechPlatform.Domain.Enums;
 using FintechPlatform.Domain.Repositories;
 
 namespace FintechPlatform.Api.Services;
@@ -26,9 +27,14 @@ public class MerchantService : IMerchantService
 
         var merchant = new Merchant(name, email);
         await _unitOfWork.Merchants.AddAsync(merchant, cancellationToken);
+        
+        // Create default USD balance for the merchant
+        var usdBalance = new Balance(merchant.Id, "USD");
+        await _unitOfWork.Balances.AddAsync(usdBalance, cancellationToken);
+        
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Created merchant {MerchantId} with email {Email}", merchant.Id, email);
+        _logger.LogInformation("Created merchant {MerchantId} with email {Email} and USD balance", merchant.Id, email);
 
         return merchant.ToDto();
     }

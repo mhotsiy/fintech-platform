@@ -1,40 +1,15 @@
-using FintechPlatform.Api.BackgroundServices;
 using FintechPlatform.Api.Services;
 using FintechPlatform.Domain.Repositories;
 using FintechPlatform.Infrastructure.Data;
 using FintechPlatform.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
-using System.Reflection;
-using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        // Serialize enums as strings instead of integers
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Fintech Platform API",
-        Version = "v1",
-        Description = "A fintech payment platform with ACID transactions, event-driven architecture using Kafka, and ledger-based balance tracking",
-        Contact = new OpenApiContact
-        {
-            Name = "Fintech Platform Team"
-        }
-    });
-
-    // Enable XML comments for better documentation
-    var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
-});
+builder.Services.AddSwaggerGen();
 
 // CORS configuration
 builder.Services.AddCors(options =>
@@ -71,10 +46,6 @@ builder.Services.Configure<KafkaSettings>(
 
 // Register event publisher
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
-
-// Register background services (event consumers)
-builder.Services.AddHostedService<PaymentEventConsumer>();
-builder.Services.AddHostedService<WithdrawalEventConsumer>();
 
 // Register services
 builder.Services.AddScoped<IMerchantService, MerchantService>();

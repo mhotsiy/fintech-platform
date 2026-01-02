@@ -1,7 +1,9 @@
 using FintechPlatform.Api.Mapping;
 using FintechPlatform.Api.Models.Dtos;
 using FintechPlatform.Domain.Entities;
+using FintechPlatform.Domain.Events;
 using FintechPlatform.Domain.Repositories;
+using FintechPlatform.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace FintechPlatform.Api.Services;
@@ -9,11 +11,16 @@ namespace FintechPlatform.Api.Services;
 public class PaymentService : IPaymentService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEventPublisher _eventPublisher;
     private readonly ILogger<PaymentService> _logger;
 
-    public PaymentService(IUnitOfWork unitOfWork, ILogger<PaymentService> logger)
+    public PaymentService(
+        IUnitOfWork unitOfWork, 
+        IEventPublisher eventPublisher,
+        ILogger<PaymentService> logger)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -31,6 +38,18 @@ public class PaymentService : IPaymentService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Created payment {PaymentId} for merchant {MerchantId}", payment.Id, merchantId);
+
+        // Publish event after successful DB commit
+        var paymentCreatedEvent = new PaymentCreatedEvent(
+            payment.Id,
+            payment.MerchantId,
+            payment.AmountInMinorUnits,
+            payment.Currency,
+            payment.ExternalReference,
+            payment.Description
+        );
+
+        await _eventPublisher.PublishAsync("payment-events", paymentCreatedEvent, cancellationToken);
 
         return payment.ToDto();
     }
@@ -84,6 +103,18 @@ public class PaymentService : IPaymentService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogInformation("Completed payment {PaymentId}, updated balance for merchant {MerchantId}", paymentId, payment.MerchantId);
+
+            // Publish event after successful DB commit
+            var paymentCompletedEvent = new PaymentCompletedEvent(
+                payment.Id,
+                payment.MerchantId,
+                payment.AmountInMinorUnits,
+                payment.Currency,
+                balance.AvailableBalanceInMinorUnits,
+                ledgerEntry.Id
+            );
+
+            await _eventPublisher.PublishAsync("payment-events", paymentCompletedEvent, cancellationToken);
 
             return payment.ToDto();
         }
