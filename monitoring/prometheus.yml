@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s # Scrape targets every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+  external_labels:
+    monitor: 'fintech-platform'
+
+# Scrape configurations
+scrape_configs:
+  # Scrape Workers metrics
+  - job_name: 'workers'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['workers:5002'] # Workers running in Docker
+        labels:
+          service: 'fraud-detection-worker'
+
+  # Future: Add API metrics
+  # - job_name: 'api'
+  #   scrape_interval: 15s
+  #   static_configs:
+  #     - targets: ['host.docker.internal:5153']
+  #       labels:
+  #         service: 'fintech-api'
