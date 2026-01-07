@@ -55,7 +55,7 @@ jobs:
             ${{ runner.os }}-buildx-
 
       - name: Start services
-        run: docker compose up -d --wait --wait-timeout 120
+        run: docker compose up -d --wait --wait-timeout 480
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
