@@ -46,9 +46,22 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(p => p.CompletedAt)
             .HasColumnName("completed_at");
 
+        builder.Property(p => p.CompletedBy)
+            .HasColumnName("completed_by")
+            .HasConversion<int?>();
+
         builder.Property(p => p.UpdatedAt)
             .HasColumnName("updated_at")
             .IsRequired();
+
+        builder.Property(p => p.RefundedAt)
+            .HasColumnName("refunded_at");
+
+        builder.Property(p => p.RefundReason)
+            .HasColumnName("refund_reason");
+
+        builder.Property(p => p.RefundedAmountInMinorUnits)
+            .HasColumnName("refunded_amount_in_minor_units");
 
         builder.HasIndex(p => p.MerchantId);
         builder.HasIndex(p => p.Status);

@@ -52,16 +52,16 @@ public class UnitOfWork : IUnitOfWork
         {
             await _context.SaveChangesAsync(cancellationToken);
             await _transaction.CommitAsync(cancellationToken);
+            
+            // Clean up on success
+            _transaction.Dispose();
+            _transaction = null;
         }
         catch
         {
+            // Rollback handles disposal and nulling
             await RollbackTransactionAsync(cancellationToken);
             throw;
-        }
-        finally
-        {
-            _transaction.Dispose();
-            _transaction = null;
         }
     }
 
@@ -69,7 +69,7 @@ public class UnitOfWork : IUnitOfWork
     {
         if (_transaction == null)
         {
-            throw new InvalidOperationException("No transaction started");
+            return; // Nothing to rollback
         }
 
         await _transaction.RollbackAsync(cancellationToken);

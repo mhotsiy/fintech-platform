@@ -93,7 +93,7 @@ public class KafkaDeadLetterQueuePublisher : IDeadLetterQueuePublisher, IDisposa
             var result = await _producer.ProduceAsync(DLQ_TOPIC, message, cancellationToken);
 
             _logger.LogWarning(
-                "☠️ Event sent to DLQ | Topic: {OriginalTopic} | EventType: {EventType} | Reason: {FailureReason} | RetryCount: {RetryCount} | DLQ Offset: {DlqOffset}",
+                "[DLQ] Event sent to DLQ | Topic: {OriginalTopic} | EventType: {EventType} | Reason: {FailureReason} | RetryCount: {RetryCount} | DLQ Offset: {DlqOffset}",
                 failedEvent.OriginalTopic,
                 failedEvent.EventType,
                 failedEvent.FailureReason,
