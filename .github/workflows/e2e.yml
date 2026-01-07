@@ -21,6 +21,15 @@ on:
         required: false
         default: 'dev'
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
@@ -108,5 +117,80 @@ jobs:
       - name: Show docker logs on failure
         if: failure()
         run: |
-          docker-compose logs api
-          docker-compose logs admin-ui
+          docker compose logs api
+          docker compose logs admin-ui
+
+  publish-report:
+    name: Publish Test Report
+    needs: e2e-tests
+    if: always()
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playwright-report-*
+          path: all-reports
+          merge-multiple: false
+
+      - name: Merge reports into single directory
+        run: |
+          mkdir -p merged-report
+          for dir in all-reports/playwright-report-*; do
+            browser=$(basename "$dir" | sed 's/playwright-report-//')
+            mkdir -p "merged-report/$browser"
+            cp -r "$dir"/* "merged-report/$browser/" || true
+          done
+          
+          # Create index page that lists all browser reports
+          cat > merged-report/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>E2E Test Reports</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+              h1 { color: #333; }
+              .browser-link { display: block; padding: 15px; margin: 10px 0; background: #f5f5f5; 
+                             text-decoration: none; color: #0066cc; border-radius: 5px; }
+              .browser-link:hover { background: #e0e0e0; }
+            </style>
+          </head>
+          <body>
+            <h1>E2E Test Reports - All Browsers</h1>
+          EOF
+          
+          for dir in all-reports/playwright-report-*; do
+            browser=$(basename "$dir" | sed 's/playwright-report-//')
+            echo "<a class='browser-link' href='$browser/index.html'>View $browser Report</a>" >> merged-report/index.html
+          done
+          
+          echo '</body></html>' >> merged-report/index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: merged-report
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Comment report URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## E2E Test Report Published\n\nView the test report at: ${{ steps.deployment.outputs.page_url }}`
+            })

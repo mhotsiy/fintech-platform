@@ -32,7 +32,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5173',
     screenshot: 'only-on-failure',
-    video: process.env.CI ? 'retain-on-failure' : 'off',
+    video: 'retain-on-failure',
     trace: process.env.CI ? 'retain-on-failure' : 'off',
     actionTimeout: parseInt(process.env.ACTION_TIMEOUT || '10000'),
     navigationTimeout: parseInt(process.env.NAV_TIMEOUT || '30000'),
