@@ -6,8 +6,15 @@ using FintechPlatform.Workers.Workers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Prometheus;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Configure Prometheus metrics server
+builder.Services.AddMetricServer(options =>
+{
+    options.Port = 5002; // Expose metrics on http://localhost:5002/metrics
+});
 
 // Database configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")

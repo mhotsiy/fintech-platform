@@ -1,5 +1,7 @@
+using FintechPlatform.Domain.Events;
 using FintechPlatform.Domain.Repositories;
 using FintechPlatform.Infrastructure.Data.Repositories;
+using FintechPlatform.Infrastructure.Messaging;
 using Microsoft.Extensions.Logging;
 
 namespace FintechPlatform.Workers.Services;
@@ -11,13 +13,16 @@ public class PaymentWorkflowService
 {
     private readonly ILogger<PaymentWorkflowService> _logger;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEventPublisher _eventPublisher;
 
     public PaymentWorkflowService(
         ILogger<PaymentWorkflowService> logger,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IEventPublisher eventPublisher)
     {
         _logger = logger;
         _unitOfWork = unitOfWork;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<int> GetMerchantCompletedPaymentCountAsync(Guid merchantId, CancellationToken cancellationToken = default)
@@ -26,54 +31,77 @@ public class PaymentWorkflowService
         return payments.Count(p => p.Status == Domain.Entities.PaymentStatus.Completed);
     }
 
-    public async Task CompletePaymentAsync(Guid paymentId, CancellationToken cancellationToken = default)
+    public async Task CompletePaymentAsync(Guid paymentId, Domain.Entities.CompletionSource completionSource = Domain.Entities.CompletionSource.Manual, CancellationToken cancellationToken = default)
     {
-        var payment = await _unitOfWork.Payments.GetByIdAsync(paymentId, cancellationToken);
-        if (payment == null)
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        try
         {
-            throw new InvalidOperationException($"Payment {paymentId} not found");
-        }
+            var payment = await _unitOfWork.Payments.GetByIdAsync(paymentId, cancellationToken);
+            if (payment == null)
+            {
+                throw new InvalidOperationException($"Payment {paymentId} not found");
+            }
 
-        if (payment.Status != Domain.Entities.PaymentStatus.Pending)
+            if (payment.Status != Domain.Entities.PaymentStatus.Pending)
+            {
+                throw new InvalidOperationException($"Payment {paymentId} cannot be completed. Current status: {payment.Status}");
+            }
+
+            // Update payment status
+            payment.Complete(completionSource);
+
+            // Update balance
+            var balance = await _unitOfWork.Balances.GetByMerchantIdAndCurrencyAsync(
+                payment.MerchantId,
+                payment.Currency,
+                cancellationToken);
+
+            if (balance == null)
+            {
+                // Create balance if it doesn't exist
+                balance = new Domain.Entities.Balance(payment.MerchantId, payment.Currency);
+                await _unitOfWork.Balances.AddAsync(balance, cancellationToken);
+                _logger.LogInformation("Created new balance for merchant {MerchantId} in {Currency}", payment.MerchantId, payment.Currency);
+            }
+
+            balance.AddToAvailableBalance(payment.AmountInMinorUnits);
+
+            // Create ledger entry
+            var ledgerEntry = new Domain.Entities.LedgerEntry(
+                payment.MerchantId,
+                Domain.Entities.LedgerEntryType.PaymentReceived,
+                payment.AmountInMinorUnits,
+                payment.Currency,
+                balance.AvailableBalanceInMinorUnits,
+                payment.Id,
+                null,
+                $"Payment completed: {payment.Description}",
+                null);
+
+            await _unitOfWork.LedgerEntries.AddAsync(ledgerEntry, cancellationToken);
+
+            // Commit transaction
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Payment {PaymentId} completed successfully by worker", paymentId);
+
+            // Publish PaymentCompletedEvent after successful commit
+            var paymentCompletedEvent = new PaymentCompletedEvent(
+                payment.Id,
+                payment.MerchantId,
+                payment.AmountInMinorUnits,
+                payment.Currency,
+                balance.AvailableBalanceInMinorUnits,
+                ledgerEntry.Id);
+
+            await _eventPublisher.PublishAsync("payment-events", paymentCompletedEvent, cancellationToken);
+            _logger.LogInformation("Published PaymentCompletedEvent for payment {PaymentId}", paymentId);
+        }
+        catch
         {
-            throw new InvalidOperationException($"Payment {paymentId} cannot be completed. Current status: {payment.Status}");
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
         }
-
-        // Update balance
-        var balance = await _unitOfWork.Balances.GetByMerchantIdAndCurrencyAsync(
-            payment.MerchantId,
-            payment.Currency,
-            cancellationToken);
-
-        if (balance == null)
-        {
-            throw new InvalidOperationException($"Balance not found for merchant {payment.MerchantId}");
-        }
-
-        balance.AddToAvailableBalance(payment.AmountInMinorUnits);
-        await _unitOfWork.Balances.UpdateAsync(balance, cancellationToken);
-
-        // Create ledger entry
-        var ledgerEntry = new Domain.Entities.LedgerEntry(
-            payment.MerchantId,
-            Domain.Entities.LedgerEntryType.PaymentReceived,
-            payment.AmountInMinorUnits,
-            payment.Currency,
-            balance.AvailableBalanceInMinorUnits,
-            payment.Id,
-            null,
-            $"Payment completed: {payment.Description}",
-            null);
-
-        await _unitOfWork.LedgerEntries.AddAsync(ledgerEntry, cancellationToken);
-
-        // Update payment status
-        payment.Complete();
-        await _unitOfWork.Payments.UpdateAsync(payment, cancellationToken);
-
-        // Commit transaction
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation("Payment {PaymentId} completed successfully by worker", paymentId);
     }
 }
