@@ -55,7 +55,9 @@ jobs:
             ${{ runner.os }}-buildx-
 
       - name: Start services
-        run: docker compose up -d --wait --wait-timeout 480
+        run: |
+          docker compose up -d postgres kafka api admin-ui
+          docker compose up --wait postgres api admin-ui --wait-timeout 480
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
