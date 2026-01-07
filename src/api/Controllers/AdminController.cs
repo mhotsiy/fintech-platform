@@ -54,7 +54,7 @@ public class AdminController : ControllerBase
         if (!isValid)
         {
             _logger.LogError(
-                "❌ Balance mismatch for merchant {MerchantId} in {Currency}: Balance table = {BalanceTable}, Ledger = {Ledger}",
+                "[MISMATCH] Balance mismatch for merchant {MerchantId} in {Currency}: Balance table = {BalanceTable}, Ledger = {Ledger}",
                 merchantId,
                 currency,
                 balanceTableValue,
@@ -63,7 +63,7 @@ public class AdminController : ControllerBase
         else
         {
             _logger.LogInformation(
-                "✅ Balance verified for merchant {MerchantId} in {Currency}: {Balance}",
+                "[VERIFIED] Balance verified for merchant {MerchantId} in {Currency}: {Balance}",
                 merchantId,
                 currency,
                 balanceTableValue);
@@ -78,8 +78,8 @@ public class AdminController : ControllerBase
             IsValid = isValid,
             DifferenceInMinorUnits = ledgerBalance - balanceTableValue,
             Message = isValid 
-                ? "✅ Balance matches ledger - data integrity confirmed" 
-                : "❌ Balance DOES NOT match ledger - data corruption detected!"
+                ? "[OK] Balance matches ledger - data integrity confirmed" 
+                : "[ERROR] Balance DOES NOT match ledger - data corruption detected!"
         });
     }
 

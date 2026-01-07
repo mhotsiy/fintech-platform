@@ -201,14 +201,14 @@ public class FraudDetectionService : BackgroundService
             await paymentService.CompletePaymentAsync(paymentId, cancellationToken);
 
             _logger.LogInformation(
-                "✅ Fraud Detection: Successfully auto-completed payment {PaymentId}",
+                "[SUCCESS] Fraud Detection: Successfully auto-completed payment {PaymentId}",
                 paymentId);
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
-                "❌ Fraud Detection: Failed to auto-complete payment {PaymentId}",
+                "[FAILED] Fraud Detection: Failed to auto-complete payment {PaymentId}",
                 paymentId);
         }
     }

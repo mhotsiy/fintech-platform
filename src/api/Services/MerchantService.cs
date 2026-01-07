@@ -1,5 +1,6 @@
 using FintechPlatform.Api.Mapping;
 using FintechPlatform.Api.Models.Dtos;
+using FintechPlatform.Api.Models.Responses;
 using FintechPlatform.Domain.Entities;
 using FintechPlatform.Domain.Enums;
 using FintechPlatform.Domain.Repositories;
@@ -27,14 +28,9 @@ public class MerchantService : IMerchantService
 
         var merchant = new Merchant(name, email);
         await _unitOfWork.Merchants.AddAsync(merchant, cancellationToken);
-        
-        // Create default USD balance for the merchant
-        var usdBalance = new Balance(merchant.Id, "USD");
-        await _unitOfWork.Balances.AddAsync(usdBalance, cancellationToken);
-        
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Created merchant {MerchantId} with email {Email} and USD balance", merchant.Id, email);
+        _logger.LogInformation("Created merchant {MerchantId} with email {Email}", merchant.Id, email);
 
         return merchant.ToDto();
     }
@@ -49,5 +45,56 @@ public class MerchantService : IMerchantService
     {
         var merchants = await _unitOfWork.Merchants.GetAllActiveAsync(cancellationToken);
         return merchants.Select(m => m.ToDto());
+    }
+
+    public async Task<IEnumerable<BalanceResponse>> GetMerchantBalancesAsync(Guid merchantId, CancellationToken cancellationToken = default)
+    {
+        // Verify merchant exists
+        var merchant = await _unitOfWork.Merchants.GetByIdAsync(merchantId, cancellationToken);
+        if (merchant == null)
+        {
+            throw new InvalidOperationException($"Merchant {merchantId} not found");
+        }
+
+        var balances = await _unitOfWork.Balances.GetByMerchantIdAsync(merchantId, cancellationToken);
+        
+        return balances.Select(b => new BalanceResponse
+        {
+            Id = b.Id,
+            MerchantId = b.MerchantId,
+            Currency = b.Currency,
+            AvailableBalanceInMinorUnits = b.AvailableBalanceInMinorUnits,
+            PendingBalanceInMinorUnits = b.PendingBalanceInMinorUnits,
+            TotalBalanceInMinorUnits = b.AvailableBalanceInMinorUnits + b.PendingBalanceInMinorUnits,
+            LastUpdated = b.UpdatedAt
+        });
+    }
+
+    public async Task<BalanceResponse?> GetMerchantBalanceAsync(Guid merchantId, string currency, CancellationToken cancellationToken = default)
+    {
+        // Verify merchant exists
+        var merchant = await _unitOfWork.Merchants.GetByIdAsync(merchantId, cancellationToken);
+        if (merchant == null)
+        {
+            throw new InvalidOperationException($"Merchant {merchantId} not found");
+        }
+
+        var balance = await _unitOfWork.Balances.GetByMerchantIdAndCurrencyAsync(merchantId, currency.ToUpperInvariant(), cancellationToken);
+        
+        if (balance == null)
+        {
+            return null;
+        }
+
+        return new BalanceResponse
+        {
+            Id = balance.Id,
+            MerchantId = balance.MerchantId,
+            Currency = balance.Currency,
+            AvailableBalanceInMinorUnits = balance.AvailableBalanceInMinorUnits,
+            PendingBalanceInMinorUnits = balance.PendingBalanceInMinorUnits,
+            TotalBalanceInMinorUnits = balance.AvailableBalanceInMinorUnits + balance.PendingBalanceInMinorUnits,
+            LastUpdated = balance.UpdatedAt
+        };
     }
 }

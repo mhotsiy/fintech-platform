@@ -58,4 +58,42 @@ public class MerchantsController : ControllerBase
         var merchants = await _merchantService.GetActiveMerchantsAsync(cancellationToken);
         return Ok(merchants);
     }
+
+    [HttpGet("{merchantId:guid}/balances")]
+    public async Task<ActionResult<IEnumerable<Models.Responses.BalanceResponse>>> GetMerchantBalances(Guid merchantId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Getting balances for merchant {MerchantId}", merchantId);
+            var balances = await _merchantService.GetMerchantBalancesAsync(merchantId, cancellationToken);
+            return Ok(balances);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Merchant {MerchantId} not found", merchantId);
+            return NotFound(new { Error = ex.Message });
+        }
+    }
+
+    [HttpGet("{merchantId:guid}/balances/{currency}")]
+    public async Task<ActionResult<Models.Responses.BalanceResponse>> GetMerchantBalance(Guid merchantId, string currency, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Getting {Currency} balance for merchant {MerchantId}", currency, merchantId);
+            var balance = await _merchantService.GetMerchantBalanceAsync(merchantId, currency, cancellationToken);
+            
+            if (balance == null)
+            {
+                return NotFound(new { Error = $"No {currency} balance found for merchant" });
+            }
+            
+            return Ok(balance);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Merchant {MerchantId} not found", merchantId);
+            return NotFound(new { Error = ex.Message });
+        }
+    }
 }

@@ -30,7 +30,14 @@ public static class MappingExtensions
             ExternalReference = payment.ExternalReference,
             Description = payment.Description,
             CreatedAt = payment.CreatedAt,
-            CompletedAt = payment.CompletedAt
+            CompletedAt = payment.CompletedAt,
+            CompletedBy = payment.CompletedBy?.ToString(),
+            RefundedAt = payment.RefundedAt,
+            RefundReason = payment.RefundReason,
+            RefundedAmountInMinorUnits = payment.RefundedAmountInMinorUnits,
+            RefundedAmountInMajorUnits = payment.RefundedAmountInMinorUnits.HasValue 
+                ? ConvertMinorToMajor(payment.RefundedAmountInMinorUnits.Value) 
+                : null
         };
     }
 

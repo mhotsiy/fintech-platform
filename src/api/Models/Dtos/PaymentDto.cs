@@ -12,4 +12,9 @@ public class PaymentDto
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public string? CompletedBy { get; set; }
+    public DateTime? RefundedAt { get; set; }
+    public string? RefundReason { get; set; }
+    public long? RefundedAmountInMinorUnits { get; set; }
+    public decimal? RefundedAmountInMajorUnits { get; set; }
 }
