@@ -46,7 +46,7 @@ jobs:
             ${{ runner.os }}-buildx-
 
       - name: Start services
-        run: docker-compose up -d postgres api admin-ui
+        run: docker compose up -d postgres api admin-ui
         
       - name: Wait for services
         run: |
