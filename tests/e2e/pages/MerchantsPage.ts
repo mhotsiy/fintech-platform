@@ -30,10 +30,19 @@ export class MerchantsPage extends BasePage {
     await this.nameInput.fill(name);
     await this.emailInput.fill(email);
     await this.submitButton.click();
+    
+    // Wait for modal to close
+    await expect(this.nameInput).not.toBeVisible({ timeout: 5000 });
+    
+    // Wait for the new merchant card to appear with the name
+    await expect(
+      this.page.locator('[data-testid^="merchant-card-"]', { hasText: name })
+    ).toBeVisible({ timeout: 10000 });
   }
 
   async searchMerchant(query: string) {
     await this.searchInput.fill(query);
+    // Playwright auto-waits for the input, no need for manual timeout
   }
 
   async clearSearch() {
@@ -49,7 +58,13 @@ export class MerchantsPage extends BasePage {
   }
 
   async verifySearchResults(minCount: number = 1) {
-    const count = await this.getMerchantCount();
+    // Wait for at least minCount merchant cards to be visible
+    if (minCount > 0) {
+      await expect(this.merchantCards.first()).toBeVisible({ timeout: 10000 });
+    }
+    
+    // Verify we have at least the minimum count
+    const count = await this.merchantCards.count();
     expect(count).toBeGreaterThanOrEqual(minCount);
   }
 

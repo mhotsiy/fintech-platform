@@ -137,9 +137,6 @@ jobs:
     needs: e2e-tests
     if: always()
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
       - name: Download all reports
@@ -183,20 +180,33 @@ jobs:
           
           echo '</body></html>' >> merged-report/index.html
 
+      - name: Upload merged report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-test-report
+          path: merged-report/
+          retention-days: 30
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        continue-on-error: true
+        id: pages-setup
 
       - name: Upload Pages artifact
+        if: steps.pages-setup.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: merged-report
+        continue-on-error: true
 
       - name: Deploy to GitHub Pages
+        if: steps.pages-setup.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
 
       - name: Comment report URL
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.deployment.outcome == 'success'
         uses: actions/github-script@v7
         with:
           script: |
@@ -206,3 +216,4 @@ jobs:
               repo: context.repo.repo,
               body: `## E2E Test Report Published\n\nView the test report at: ${{ steps.deployment.outputs.page_url }}`
             })
+        continue-on-error: true
