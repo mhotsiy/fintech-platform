@@ -48,10 +48,13 @@ jobs:
       - name: Start services
         run: docker compose up -d postgres api admin-ui
         
-      - name: Wait for services
+      - name: Wait for services to be healthy
         run: |
-          timeout 60 bash -c 'until curl -f http://localhost:5173 > /dev/null 2>&1; do sleep 2; done'
-          timeout 60 bash -c 'until curl -f http://localhost:5153/health > /dev/null 2>&1; do sleep 2; done'
+          echo "Waiting for API health check..."
+          timeout 90 bash -c 'until docker compose ps api | grep -q "healthy"; do sleep 2; done'
+          echo "Waiting for Admin UI health check..."
+          timeout 90 bash -c 'until docker compose ps admin-ui | grep -q "healthy"; do sleep 2; done'
+          echo "All services healthy!"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
