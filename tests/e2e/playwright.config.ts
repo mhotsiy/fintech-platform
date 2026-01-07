@@ -1,15 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// ES module __dirname equivalent
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load .env file if it exists (local development)
+// Load .env file from working directory (local development)
 // Command line env vars take precedence over .env
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config();
 
 /**
  * Playwright configuration for FintechPlatform E2E tests
