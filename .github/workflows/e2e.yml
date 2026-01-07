@@ -56,8 +56,15 @@ jobs:
 
       - name: Start services
         run: |
-          docker compose up -d postgres kafka api admin-ui
-          docker compose up --wait postgres api admin-ui --wait-timeout 480
+          docker compose up -d postgres kafka zookeeper
+          docker compose up --wait postgres --wait-timeout 120
+          
+          echo "Running database migrations..."
+          docker compose up flyway
+          
+          echo "Starting application services..."
+          docker compose up -d api admin-ui
+          docker compose up --wait api admin-ui --wait-timeout 480
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
