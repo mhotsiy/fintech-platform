@@ -156,17 +156,16 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # Client-side code runs in browser, so use host machine's localhost
       - VITE_API_URL=http://localhost:5153
     volumes:
       - ./admin-ui:/app
       - /app/node_modules
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "echo '[admin-ui] Starting npm install...' && npm install && echo '[admin-ui] npm install complete. Starting dev server...' && npm run dev -- --host 0.0.0.0"
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173"]
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:5173 && echo '[admin-ui] Health check passed' || echo '[admin-ui] Health check FAILED'"]
       interval: 15s
       timeout: 5s
       retries: 15
