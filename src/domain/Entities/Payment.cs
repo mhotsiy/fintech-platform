@@ -8,6 +8,12 @@ public enum PaymentStatus
     Refunded = 3
 }
 
+public enum CompletionSource
+{
+    Manual = 0,
+    FraudDetection = 1
+}
+
 public class Payment
 {
     public Guid Id { get; private set; }
@@ -19,6 +25,10 @@ public class Payment
     public string? Description { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
+    public CompletionSource? CompletedBy { get; private set; }
+    public DateTime? RefundedAt { get; private set; }
+    public string? RefundReason { get; private set; }
+    public long? RefundedAmountInMinorUnits { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
     private Payment()
@@ -51,13 +61,14 @@ public class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Complete()
+    public void Complete(CompletionSource completionSource = CompletionSource.Manual)
     {
         if (Status != PaymentStatus.Pending)
             throw new InvalidOperationException($"Cannot complete payment in {Status} status");
 
         Status = PaymentStatus.Completed;
         CompletedAt = DateTime.UtcNow;
+        CompletedBy = completionSource;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -70,12 +81,21 @@ public class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Refund()
+    public void Refund(long refundAmountInMinorUnits, string? reason = null)
     {
         if (Status != PaymentStatus.Completed)
             throw new InvalidOperationException("Only completed payments can be refunded");
 
+        if (refundAmountInMinorUnits <= 0)
+            throw new ArgumentException("Refund amount must be greater than zero", nameof(refundAmountInMinorUnits));
+
+        if (refundAmountInMinorUnits > AmountInMinorUnits)
+            throw new ArgumentException("Refund amount cannot exceed payment amount", nameof(refundAmountInMinorUnits));
+
         Status = PaymentStatus.Refunded;
+        RefundedAt = DateTime.UtcNow;
+        RefundReason = reason;
+        RefundedAmountInMinorUnits = refundAmountInMinorUnits;
         UpdatedAt = DateTime.UtcNow;
     }
 }

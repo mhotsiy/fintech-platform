@@ -7,7 +7,9 @@ public enum LedgerEntryType
     WithdrawalInitiated = 2,
     WithdrawalCompleted = 3,
     WithdrawalFailed = 4,
-    BalanceAdjustment = 5
+    WithdrawalRequested = 5,
+    WithdrawalCancelled = 6,
+    BalanceAdjustment = 7
 }
 
 public class LedgerEntry
