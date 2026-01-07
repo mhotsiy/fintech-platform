@@ -74,7 +74,21 @@ API_URL=http://localhost:5153
 
 ## Tips
 
-- Tests run sequentially (workers=1) to avoid race conditions
-- Failed tests capture screenshots and videos
+- Tests run in parallel (4 workers in CI, 1 locally)
+- Failed tests capture screenshots, videos, and **console errors**
 - Use `--headed` to watch tests execute
 - Use `--ui` for interactive debugging
+- **Console errors and warnings** are automatically captured and attached to test reports
+- Check `playwright-report/` for detailed console logs after test runs
+
+## Console Error Reporting
+
+Tests automatically capture and report:
+- ❌ **Console errors**: Red flag in terminal and attached to HTML report
+- ⚠️ **Console warnings**: Attached to test report
+- ℹ️ **Failed network requests**: Logged for debugging API issues
+
+After test completion, check:
+1. Terminal output for real-time console errors
+2. HTML report (`playwright-report/index.html`) for attached console logs
+3. `test-results/results.json` for programmatic access

@@ -13,7 +13,8 @@ export default defineConfig({
   workers: process.env.CI ? 4 : 1,
   reporter: [
     ['list'],
-    ['html', { outputFolder: 'playwright-report' }]
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['json', { outputFile: 'test-results/results.json' }]
   ],
   
   use: {
@@ -21,6 +22,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: process.env.CI ? 'retain-on-failure' : 'off',
     trace: process.env.CI ? 'retain-on-failure' : 'off',
+    actionTimeout: 10000,
+    navigationTimeout: 30000,
   },
 
   projects: [

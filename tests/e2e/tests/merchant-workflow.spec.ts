@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 import { MerchantsPage } from '../pages/MerchantsPage';
 import { generateUniqueMerchant } from '../fixtures/test-data';
 
