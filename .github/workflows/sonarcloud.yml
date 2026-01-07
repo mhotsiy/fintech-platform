@@ -1,10 +1,12 @@
 name: SonarCloud
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:  # Manual trigger only
+  # Uncomment after SonarCloud setup is complete:
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
 
 jobs:
   analyze:
