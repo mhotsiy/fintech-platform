@@ -10,7 +10,7 @@ scrape_configs:
   - job_name: 'workers'
     scrape_interval: 15s
     static_configs:
-      - targets: ['workers:5002'] # Workers running in Docker
+      - targets: ['172.20.62.22:5002'] # Workers expose metrics on port 5002
         labels:
           service: 'fraud-detection-worker'
 

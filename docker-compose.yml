@@ -143,6 +143,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  admin-ui:
+    image: node:20-alpine
+    container_name: fintechplatform-admin-ui
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      # Client-side code runs in browser, so use host machine's localhost
+      - VITE_API_URL=http://localhost:5153
+    volumes:
+      - ./admin-ui:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - api
+    restart: unless-stopped
+    network_mode: bridge
+
 volumes:
   postgres_data:
   prometheus_data:
