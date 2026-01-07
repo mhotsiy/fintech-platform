@@ -23,3 +23,17 @@ View: https://sonarcloud.io/project/overview?id=mhotsiy_fintech-platform
 - Scans code for bugs, code smells, security issues
 - Shows results on PRs
 - Zero configuration needed
+
+---
+
+## GitHub Pages Setup (Optional - for E2E test reports)
+
+1. Go to GitHub repo → Settings → Pages
+2. Source: "GitHub Actions"
+3. Save
+4. Add repository variable: Settings → Variables → Actions → New variable
+   - Name: `PAGES_ENABLED`
+   - Value: `true`
+
+After setup, test reports will be published at:
+https://mhotsiy.github.io/fintech-platform/

@@ -115,7 +115,7 @@ jobs:
   publish-report:
     name: Publish Test Report
     needs: e2e-tests
-    if: always()
+    if: always() && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
