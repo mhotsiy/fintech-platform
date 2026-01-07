@@ -22,7 +22,7 @@ export default defineConfig({
   timeout: parseInt(process.env.TEST_TIMEOUT || '60000'),
   fullyParallel: true,
   retries: process.env.CI ? parseInt(process.env.RETRIES || '2') : 0,
-  workers: process.env.WORKERS || (process.env.CI ? 4 : 1),
+  workers: parseInt(process.env.WORKERS || (process.env.CI ? '4' : '1')),
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
