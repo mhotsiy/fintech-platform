@@ -84,6 +84,13 @@ jobs:
 
       - name: Run E2E tests
         working-directory: tests/e2e
+        run: |
+          echo "Testing API accessibility..."
+          curl -v http://localhost:5153/health || echo "API not accessible"
+          echo "Testing admin-ui accessibility..."
+          curl -v http://localhost:5173 || echo "Admin-UI not accessible"
+          npm test
+        working-directory: tests/e2e
         run: npm test
         env:
           BASE_URL: http://localhost:5173
