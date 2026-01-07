@@ -18,18 +18,29 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddMemoryCache();
 
 // CORS configuration
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:5173", "http://localhost:5153", "http://127.0.0.1:5173" };
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials()  // Required for SignalR WebSockets
-              .WithExposedHeaders("*");
+        // Allow common localhost origins for development
+        policy.SetIsOriginAllowed(origin => 
+            {
+                // In development, allow localhost and 127.0.0.1 on any port
+                if (builder.Environment.IsDevelopment())
+                {
+                    var uri = new Uri(origin);
+                    return uri.Host == "localhost" || uri.Host == "127.0.0.1";
+                }
+                
+                // In production, check configured origins
+                var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                    ?? Array.Empty<string>();
+                return allowedOrigins.Contains(origin);
+            })
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()
+            .WithExposedHeaders("*");
     });
 });
 
@@ -89,6 +100,9 @@ builder.Services.AddLogging(logging =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
+// Global exception handler should be first
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

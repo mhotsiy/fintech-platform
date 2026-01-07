@@ -120,10 +120,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=fintechplatform;Username=postgres;Password=postgres
       - Kafka__BootstrapServers=kafka:29092
-      - Cors__AllowedOrigins__0=http://localhost:5173
-      - Cors__AllowedOrigins__1=http://localhost:5153
-      - Cors__AllowedOrigins__2=http://127.0.0.1:5173
-      - Cors__AllowedOrigins__3=http://127.0.0.1:5153
     depends_on:
       postgres:
         condition: service_healthy

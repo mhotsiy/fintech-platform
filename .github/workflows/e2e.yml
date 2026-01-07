@@ -89,6 +89,8 @@ jobs:
           curl -v http://localhost:5153/health || echo "API not accessible"
           echo "Testing admin-ui accessibility..."
           curl -v http://localhost:5173 || echo "Admin-UI not accessible"
+          echo "Testing merchants API endpoint..."
+          curl -v http://localhost:5153/api/merchants || echo "Merchants endpoint failed"
           npm test
         env:
           BASE_URL: http://localhost:5173
@@ -116,8 +118,12 @@ jobs:
       - name: Show docker logs on failure
         if: failure()
         run: |
-          docker compose logs api
-          docker compose logs admin-ui
+          echo "========== API Logs =========="
+          docker compose logs --tail=100 api
+          echo "========== Admin UI Logs =========="
+          docker compose logs --tail=100 admin-ui
+          echo "========== Postgres Logs =========="
+          docker compose logs --tail=50 postgres
 
   publish-report:
     name: Publish Test Report

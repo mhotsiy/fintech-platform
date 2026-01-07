@@ -55,8 +55,18 @@ public class MerchantsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<MerchantDto>>> GetActiveMerchants(CancellationToken cancellationToken)
     {
-        var merchants = await _merchantService.GetActiveMerchantsAsync(cancellationToken);
-        return Ok(merchants);
+        try
+        {
+            _logger.LogInformation("Fetching all active merchants");
+            var merchants = await _merchantService.GetActiveMerchantsAsync(cancellationToken);
+            _logger.LogInformation("Found {Count} active merchants", merchants.Count());
+            return Ok(merchants);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching active merchants: {Message}", ex.Message);
+            throw;
+        }
     }
 
     [HttpGet("{merchantId:guid}/balances")]
