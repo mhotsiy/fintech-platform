@@ -6,10 +6,6 @@ type ConsoleEntry = {
   timestamp: number;
 };
 
-/**
- * Extended test fixture with automatic console monitoring
- * Best practice: Clean up listeners, proper typing, error handling
- */
 export const test = base.extend<{ consoleErrors: string[] }>({
   consoleErrors: async ({}, use) => {
     await use([]);
@@ -28,11 +24,11 @@ export const test = base.extend<{ consoleErrors: string[] }>({
       switch (type) {
         case 'error':
           errors.push(entry);
-          console.error(`🔴 Console Error: ${text}`);
+          console.error(`Console Error: ${text}`);
           break;
         case 'warning':
           warnings.push(entry);
-          console.warn(`🟡 Console Warning: ${text}`);
+          console.warn(`Console Warning: ${text}`);
           break;
         case 'log':
         case 'info':
@@ -48,7 +44,7 @@ export const test = base.extend<{ consoleErrors: string[] }>({
         timestamp: Date.now()
       };
       errors.push(entry);
-      console.error(`🔴 Uncaught Error: ${error.message}`);
+      console.error(`Uncaught Error: ${error.message}`);
     };
 
     const handleRequestFailed = (request: any) => {
@@ -58,7 +54,7 @@ export const test = base.extend<{ consoleErrors: string[] }>({
         timestamp: Date.now()
       };
       errors.push(entry);
-      console.error(`🔴 Failed Request: ${request.url()}`);
+      console.error(`Failed Request: ${request.url()}`);
     };
 
     page.on('console', handleConsole);
@@ -74,7 +70,7 @@ export const test = base.extend<{ consoleErrors: string[] }>({
 
     // Attach artifacts only if present
     if (errors.length > 0) {
-      console.log(`\n📋 ${errors.length} console error(s) detected`);
+      console.log(`\n${errors.length} console error(s) detected`);
       testInfo.attach('console-errors', {
         body: errors.map(e => `[${e.type}] ${e.text}`).join('\n\n'),
         contentType: 'text/plain',
